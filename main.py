@@ -13,19 +13,27 @@ from tqdm import trange
 class MyModel(nn.Module):
     def __init__(self, device: Device = None) -> None:
         super().__init__()  # Initalize module w/ PyTorch
-        self._model = nn.Sequential(
+        self._conv_block_1 = nn.Sequential(
+            nn.Conv2d(1, 10, 3),
+            nn.BatchNorm2d(10),
+            nn.ReLU(),
+            nn.Conv2d(10, 10, 3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+        )
+
+        self._classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(784, 128),
+            nn.Linear(1440, 128),
             nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU(),
-            nn.Linear(128, 10),
+            nn.Linear(128, 10)
         )
 
         self.to(device)  # Shift the model to a device (if required)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self._model(x)
+        x = self._conv_block_1(x)
+        return self._classifier(x)
 
 
 def train_model(
@@ -59,7 +67,6 @@ def train_model(
             # Shift the tensors to the target device
             data = cast(Tensor, data).to(device)
             target = cast(Tensor, target).to(device)
-
             optimizer.zero_grad()  # Reset all optimized gradients
             output: Tensor = model(data)
             loss = F.cross_entropy(output, target)
