@@ -128,14 +128,13 @@ def main():
         gpu_score = torch.cuda.get_device_capability()
         if gpu_score >= (8, 0) and torch.backends.cuda.is_built():
             torch.backends.cuda.matmul.allow_tf32 = True
-
         device = "cuda"  # Utilize GPU resources for training/testing
     else:
         device = "cpu"  # No additional optimizations are avalible
 
     train, test = train_test_dataloaders("./datasets")  # Load datasets from PyTorch
     model = MyModel(device)  # Initalize model/optimizer
-    optimizer = optim.SGD(model.parameters(), lr=0.002)
+    optimizer = optim.Adam(model.parameters(), lr=0.002)
     train_model(model, device, optimizer, train, 10)  # Train the model on the dataset
     test_model(model, device, test)
 
