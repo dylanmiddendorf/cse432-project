@@ -4,10 +4,13 @@ from torch.types import Device  # PyTorch type hints
 import torch  # Used for accessing cuda/backend
 from torch import nn, optim, Tensor
 import torch.nn.functional as F
+import torchvision.transforms as T
 from torch.utils.data import DataLoader
 from torchvision.datasets import FashionMNIST
 from torchvision.transforms import ToTensor
 from tqdm import trange
+
+from codecarbon import EmissionsTracker
 
 
 class MyModel(nn.Module):
@@ -18,15 +21,13 @@ class MyModel(nn.Module):
             nn.BatchNorm2d(10),
             nn.ReLU(),
             nn.Conv2d(10, 10, 3),
+            nn.BatchNorm2d(10),
             nn.ReLU(),
             nn.MaxPool2d(2),
         )
 
         self._classifier = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(1440, 128),
-            nn.ReLU(),
-            nn.Linear(128, 10)
+            nn.Flatten(), nn.Linear(1440, 128), nn.ReLU(), nn.Linear(128, 10)
         )
 
         self.to(device)  # Shift the model to a device (if required)
@@ -69,8 +70,9 @@ def train_model(
             target = cast(Tensor, target).to(device)
             optimizer.zero_grad()  # Reset all optimized gradients
             output: Tensor = model(data)
-            loss = F.cross_entropy(output, target)
 
+            cross_entropy_loss = F.cross_entropy(output, target)
+            loss = cross_entropy_loss  # Can be utilized for L1/L2 regularization
             loss.backward()
             optimizer.step()
 
@@ -135,6 +137,7 @@ def main():
     train, test = train_test_dataloaders("./datasets")  # Load datasets from PyTorch
     model = MyModel(device)  # Initalize model/optimizer
     optimizer = optim.Adam(model.parameters(), lr=0.002)
+
     train_model(model, device, optimizer, train, 10)  # Train the model on the dataset
     test_model(model, device, test)
 
