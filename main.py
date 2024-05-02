@@ -39,7 +39,9 @@ class MyModel(nn.Module):
             nn.Dropout(0.25),
         )
 
-        self._classifier = nn.Sequential(self._embedding, nn.ReLU(), nn.Linear(1024, 10))
+        self._classifier = nn.Sequential(
+            self._embedding, nn.ReLU(), nn.Linear(1024, 10)
+        )
 
         self.to(device)  # Shift the model to a device (if required)
 
@@ -73,7 +75,7 @@ def train_model(
         the specified number of epochs. It computes the loss using cross-entropy and performs
         backpropagation to update the model parameters.
 
-    Example usage:
+    Example:
         train_model(my_model, device, my_optimizer, train_loader)
     """
     model.train()  # Enable gradient tracking
@@ -103,9 +105,6 @@ def test_model(model: nn.Module, device: Device, test_loader: DataLoader) -> Non
     Notes:
         This function evaluates the performance of a PyTorch model on a given test dataset.
         It computes the average loss and accuracy over the test set.
-
-    Example:
-        test_model(my_model, device, test_loader)
     """
     with torch.inference_mode():
         test_loss, correct = 0.0, 0.0
@@ -131,14 +130,35 @@ def test_model(model: nn.Module, device: Device, test_loader: DataLoader) -> Non
     )
 
 
-def raw_inference(model: MyModel, test_loader: DataLoader) -> tuple[Tensor, Tensor]:
+def raw_inference(model: nn.Module, loader: DataLoader) -> tuple[Tensor, Tensor]:
+    """
+    Perform raw inference using the provided model over the entire dataset.
+
+    Args:
+        model (nn.Module): The neural network model to perform inference with.
+        loader (DataLoader): The data loader containing the Fashion-MNIST dataset.
+
+    Returns:
+        tuple[Tensor, Tensor]: A tuple containing the raw outputs of the model and the corresponding labels.
+            The first element is a Tensor containing the raw outputs of the model.
+            The second element is a Tensor containing the labels of the dataset.
+    """
     with torch.inference_mode():
-        dataset: FashionMNIST = test_loader.dataset  # Type hint dataset for mypy
+        dataset: FashionMNIST = loader.dataset  # Type hint dataset for mypy
         data = (dataset.data / 255.0).unsqueeze(1)  # Normalize and format dataset
         return model(data), dataset.targets
 
 
 def train_test_dataloaders(root: str) -> tuple[DataLoader, DataLoader]:
+    """
+    Obtain train and test data loaders for the Fashion-MNIST dataset.
+
+    Args:
+        root (str): Root directory where the Fashion-MNIST dataset will be saved.
+
+    Returns:
+        tuple[DataLoader, DataLoader]: A tuple containing the train and test data loaders.
+    """
     train_transform = v2.Compose(
         [
             v2.RandomHorizontalFlip(),
@@ -193,7 +213,7 @@ def main():
     model = MyModel(device)  # Initalize model/optimizer
     optimizer = optim.Adam(model.parameters(), lr=0.002)
 
-    train_model(model, device, optimizer, train, 20)  # Train the model on the dataset
+    train_model(model, device, optimizer, train, 1)  # Train the model on the dataset
     test_model(model, device, test)  # Display the original accuracy w/ FC classifier
 
     model = model.to("cpu")  # Shift model to CPU for scikit-learn
