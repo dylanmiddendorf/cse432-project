@@ -7,6 +7,7 @@ import pandas as pd
 import torch  # Used for accessing cuda/backend
 from torch import nn, optim, Tensor
 import torch.nn.functional as F
+from torchvision.transforms import v2
 from torch.utils.data import DataLoader
 from torchvision.datasets import FashionMNIST
 from torchvision.transforms import ToTensor
@@ -21,23 +22,24 @@ class MyModel(nn.Module):
     def __init__(self, device: Device = None) -> None:
         super().__init__()  # Initalize module w/ PyTorch
         self._conv_block_1 = nn.Sequential(
-            nn.Conv2d(1, 10, 3),
-            nn.BatchNorm2d(10),
+            nn.Conv2d(1, 64, 3),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.Conv2d(10, 10, 3),
-            nn.BatchNorm2d(10),
+            nn.Dropout(0.25),
+            nn.Conv2d(64, 64, 3),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
+            nn.Dropout(0.25),
             nn.MaxPool2d(2),
         )
 
         self._embedding = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(1440, 256),
+            nn.Linear(9216, 1024),
+            nn.Dropout(0.25),
         )
 
-        self._classifier = nn.Sequential(
-            self._embedding, nn.ReLU(), nn.Linear(256, 10)
-        )
+        self._classifier = nn.Sequential(self._embedding, nn.ReLU(), nn.Linear(1024, 10))
 
         self.to(device)  # Shift the model to a device (if required)
 
@@ -106,7 +108,7 @@ def test_model(model: nn.Module, device: Device, test_loader: DataLoader) -> Non
         test_model(my_model, device, test_loader)
     """
     with torch.inference_mode():
-        test_loss, correct = 0., 0.
+        test_loss, correct = 0.0, 0.0
         for data, target in test_loader:
             # Shift the tensors to the target device
             data = cast(Tensor, data).to(device)
@@ -137,8 +139,26 @@ def raw_inference(model: MyModel, test_loader: DataLoader) -> tuple[Tensor, Tens
 
 
 def train_test_dataloaders(root: str) -> tuple[DataLoader, DataLoader]:
-    train = FashionMNIST(root, train=True, transform=ToTensor(), download=True)
-    test = FashionMNIST(root, train=False, transform=ToTensor(), download=True)
+    train_transform = v2.Compose(
+        [
+            v2.RandomHorizontalFlip(),
+            v2.PILToTensor(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize([0.2860], [0.3530]),
+            v2.RandomErasing(),
+        ]
+    )
+
+    test_transform = v2.Compose(
+        [
+            v2.PILToTensor(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize([0.2860], [0.3530]),
+        ]
+    )
+
+    train = FashionMNIST(root, train=True, transform=train_transform, download=True)
+    test = FashionMNIST(root, train=False, transform=test_transform, download=True)
 
     # Return the dataloaders in a tuple[train_dataloader, test_dataloader]
     return DataLoader(train, 32, shuffle=True), DataLoader(test, 32, shuffle=False)
@@ -173,7 +193,7 @@ def main():
     model = MyModel(device)  # Initalize model/optimizer
     optimizer = optim.Adam(model.parameters(), lr=0.002)
 
-    train_model(model, device, optimizer, train, 5)  # Train the model on the dataset
+    train_model(model, device, optimizer, train, 20)  # Train the model on the dataset
     test_model(model, device, test)  # Display the original accuracy w/ FC classifier
 
     model = model.to("cpu")  # Shift model to CPU for scikit-learn
