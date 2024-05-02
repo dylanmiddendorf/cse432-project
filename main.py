@@ -1,14 +1,18 @@
 from typing import cast  # Python type hints
 from torch.types import Device  # PyTorch type hints
 
+import numpy as np
+import pandas as pd
+
 import torch  # Used for accessing cuda/backend
 from torch import nn, optim, Tensor
 import torch.nn.functional as F
-import torchvision.transforms as T
 from torch.utils.data import DataLoader
 from torchvision.datasets import FashionMNIST
 from torchvision.transforms import ToTensor
 from tqdm import trange
+
+from sklearn.ensemble import RandomForestClassifier
 
 from codecarbon import EmissionsTracker
 
@@ -26,8 +30,13 @@ class MyModel(nn.Module):
             nn.MaxPool2d(2),
         )
 
+        self._embedding = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(1440, 256),
+        )
+
         self._classifier = nn.Sequential(
-            nn.Flatten(), nn.Linear(1440, 128), nn.ReLU(), nn.Linear(128, 10)
+            self._embedding, nn.ReLU(), nn.Linear(256, 10)
         )
 
         self.to(device)  # Shift the model to a device (if required)
@@ -35,6 +44,9 @@ class MyModel(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = self._conv_block_1(x)
         return self._classifier(x)
+
+    def drop_classifier(self) -> None:
+        self._classifier = self._embedding
 
 
 def train_model(
@@ -117,12 +129,34 @@ def test_model(model: MyModel, device: Device, test_loader: DataLoader) -> None:
     )
 
 
+def raw_inference(model: MyModel, test_loader: DataLoader) -> Tensor:
+    with torch.inference_mode():
+        dataset: FashionMNIST = test_loader.dataset  # Type hint dataset for mypy
+        data = (dataset.data / 255.0).unsqueeze(1)  # Normalize and format dataset
+        return model(data), dataset.targets
+
+
 def train_test_dataloaders(root: str) -> tuple[DataLoader, DataLoader]:
     train = FashionMNIST(root, train=True, transform=ToTensor(), download=True)
     test = FashionMNIST(root, train=False, transform=ToTensor(), download=True)
 
     # Return the dataloaders in a tuple[train_dataloader, test_dataloader]
     return DataLoader(train, 32, shuffle=True), DataLoader(test, 32, shuffle=False)
+
+
+def train_test_dataframes(root: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def dataset_to_dataframe(dataset: FashionMNIST) -> pd.DataFrame:
+        images = cast(np.ndarray, dataset.data.flatten(1).numpy())
+        n_images, n_pixels = images.shape  # Gather relevent dataset metadata
+
+        images = images.reshape(n_images, -1)  # Flatten image arrays
+        data = pd.DataFrame(images, columns=[f"pixel_{i}" for i in range(n_pixels)])
+        data["label"] = dataset.targets.numpy()  # Append labels to the dataframe
+        return data
+
+    train = FashionMNIST(root, train=True, transform=ToTensor(), download=True)
+    test = FashionMNIST(root, train=False, transform=ToTensor(), download=True)
+    return dataset_to_dataframe(train), dataset_to_dataframe(test)
 
 
 def main():
@@ -135,11 +169,24 @@ def main():
         device = "cpu"  # No additional optimizations are avalible
 
     train, test = train_test_dataloaders("./datasets")  # Load datasets from PyTorch
+
     model = MyModel(device)  # Initalize model/optimizer
     optimizer = optim.Adam(model.parameters(), lr=0.002)
 
-    train_model(model, device, optimizer, train, 10)  # Train the model on the dataset
-    test_model(model, device, test)
+    train_model(model, device, optimizer, train, 5)  # Train the model on the dataset
+    test_model(model, device, test)  # Display the original accuracy w/ FC classifier
+
+    model = model.to("cpu")  # Shift model to CPU for scikit-learn
+    model.drop_classifier()  # Drop FC classifier in favor of ensemble
+
+    X_train, y_train = raw_inference(model, train)
+    X_test, y_test = raw_inference(model, test)
+
+    clf = RandomForestClassifier()
+    clf.fit(X_train, y_train)
+    y_pred = torch.from_numpy(clf.predict(X_test))
+    correct = y_pred.eq(y_test).sum().item()
+    print(correct / y_test.shape[0])
 
 
 if __name__ == "__main__":
