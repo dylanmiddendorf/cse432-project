@@ -1,28 +1,7 @@
-import numpy as np
-import pandas as pd
-
-import torch
-from torchvision.datasets import FashionMNIST
-from torchvision.transforms import v2
-
 from sklearn.metrics import accuracy_score
 from sklearn.ensemble import HistGradientBoostingClassifier
 
-def train_test_dataframes(root: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    def dataset_to_dataframe(dataset: FashionMNIST) -> pd.DataFrame:
-        images: np.ndarray = dataset.data.flatten(1).numpy()
-        n_images, n_pixels = images.shape  # Gather relevent dataset metadata
-
-        images = images.reshape(n_images, -1)  # Flatten image arrays
-        data = pd.DataFrame(images, columns=[f"pixel_{i}" for i in range(n_pixels)])
-        data["label"] = dataset.targets.numpy()  # Append labels to the dataframe
-        return data
-
-    transform = v2.Compose([v2.ToPureTensor(), v2.ToDtype(torch.float32, scale=True)])
-    train = FashionMNIST(root, train=True, transform=transform, download=True)
-    test = FashionMNIST(root, train=False, transform=transform, download=True)
-    return dataset_to_dataframe(train), dataset_to_dataframe(test)
-
+from utils import train_test_dataframes
 
 def main():
     train, test = train_test_dataframes("./datasets")

@@ -9,6 +9,7 @@ from torchvision.datasets import FashionMNIST
 from torchvision.transforms import ToTensor
 from tqdm import trange
 
+from utils import train_test_dataloaders
 
 class MyModel(nn.Module):
     def __init__(self, device: Device = None) -> None:
