@@ -89,7 +89,7 @@ def train_model(
             optimizer.step()
 
 
-def test_model(model: MyModel, device: Device, test_loader: DataLoader) -> None:
+def test_model(model: nn.Module, device: Device, test_loader: DataLoader) -> None:
     """
     Test the given PyTorch model on a test dataset.
 
@@ -106,7 +106,7 @@ def test_model(model: MyModel, device: Device, test_loader: DataLoader) -> None:
         test_model(my_model, device, test_loader)
     """
     with torch.inference_mode():
-        test_loss, correct = 0, 0
+        test_loss, correct = 0., 0.
         for data, target in test_loader:
             # Shift the tensors to the target device
             data = cast(Tensor, data).to(device)
@@ -117,19 +117,19 @@ def test_model(model: MyModel, device: Device, test_loader: DataLoader) -> None:
 
             test_loss += F.cross_entropy(output, target).item()
             correct += pred.eq(target.view_as(pred)).sum().item()
-    test_loss /= len(test_loader.dataset)
+    test_loss /= float(len(test_loader.dataset))
 
     print(
         "Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n".format(
             test_loss,
             correct,
             len(test_loader.dataset),
-            100.0 * correct / len(test_loader.dataset),
+            100.0 * correct / float(len(test_loader.dataset)),
         )
     )
 
 
-def raw_inference(model: MyModel, test_loader: DataLoader) -> Tensor:
+def raw_inference(model: MyModel, test_loader: DataLoader) -> tuple[Tensor, Tensor]:
     with torch.inference_mode():
         dataset: FashionMNIST = test_loader.dataset  # Type hint dataset for mypy
         data = (dataset.data / 255.0).unsqueeze(1)  # Normalize and format dataset
